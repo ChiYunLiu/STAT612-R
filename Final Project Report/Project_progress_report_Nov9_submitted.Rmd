@@ -1,0 +1,176 @@
+---
+title: "Project_Progess_Report"
+author: "Richardson, Trevor K./ Liu, Chi-Yun"
+date: "`r Sys.Date()`"
+output: pdf_document
+fontsize: 12pt
+geometry: margin=1in
+header-includes:
+    - \usepackage{setspace}\doublespacing
+---
+
+```{r setup, include=FALSE}
+# load library 
+library(tidyverse)
+library(ggplot2)
+library(usmap)
+```
+
+# Hypothesis
+
+**Hypothesis 1**: Heart disease is higher in the "Southern States" of the United States
+**Hypothesis 2**: Heart disease is higher amongst African Americans versus all other race/ethnicity
+
+**Hypothesis 3**: Heart disease is higher amongst males versus female
+
+* The scholarly journal linked here: <<https://www.ajconline.org/article/S0002-9149(05)01211-7/fulltext>> shows that African Americans are a unique population in regards to heart disease and suffer disproportionately when compared to other populations. 
+
+* The scholarly journal linked here: <<https://www.sciencedirect.com/science/article/abs/pii/S1047279707001536>> shows that African Americans in southern states suffer from stroke due to heart disease versus African Americans in other regions of the US. The article terms the southern states as the “stroke belt” indicating the stroke is more prevalent in the southern states.
+
+In the following, we will start to tidy and explore our data to find some evidence to support our hypothesis.
+
+# Load Data and Data Input
+
+We are loading the dataset from: <<https://chronicdata.cdc.gov/Heart-Disease-Stroke-Prevention/Heart-Disease-Mortality-Data-Among-US-Adults-35-by/i2vk-mgdh>>
+
+There are 59076 rows and 19 columns in the dataset.
+```{r dataIn, include=FALSE}
+# read in data
+heart_disease <- read_csv(file = "./data/Heart_Disease_Mortality_Data_Among_US_Adults__35___by_State_Territory_and_County.csv")
+# 59076 rows, 19 columns
+dim(heart_disease)
+```
+
+# Explore the Data
+
+Here we will summarize and explore the data.
+```{r veiwData, eval=FALSE}
+#first few row
+head(heart_disease)
+# structure of data
+str(heart_disease)
+#summary
+summary(heart_disease)
+```
+
+```{r findNa, eval=FALSE}
+heart_disease %>%
+  summarize(across(everything(), ~sum(is.na(.)))) # check the NA's value, remove NA's value in further calculation.
+```
+
+# Tidy Data
+
+When looking at the heart disease mortality dataset, it is a bit messy and we need to tidy the data to make it look cleaner.
+
+As for the rates of heart disease, there are two columns of note. “Data_value” and “Data_Value_Unit”. When using the unique function on Data_Value_Unit there is only one value “Per 100,000 population.” We can rename "Data_value" to "RatePer100Thous" (Rate per 100,000 population), and then remove (not select) "Data_Value_Unit" from our new dataset. After reviewing each variable, we finally keep 9 columns of variables in our new dataset.
+```{r tidyData, echo=FALSE}
+# split Location 1 into LocationLat and LocationLon
+heart_disease %>% 
+  separate(`Location 1`, into = c("LocationLat", "LocationLon"), sep = ",") %>% 
+  mutate(LocationLat = parse_number(LocationLat),
+         LocationLon = parse_number(LocationLon)) %>% 
+  select(-c(DataSource, Class, Topic,Data_Value_Unit, Data_Value_Type, Data_Value_Footnote_Symbol,Data_Value_Footnote,StratificationCategory1,StratificationCategory2,TopicID,LocationID)) %>%  # select the variables that we may use
+  rename(Gender = `Stratification1`, RatePer100Thous =`Data_Value`, RaceEthnicity = `Stratification2`, State = LocationAbbr , City = LocationDesc)-> #rename the column
+  new_hrt
+```
+
+# Evidence for Hypothesis
+
+## Hypothesis 1
+
+Our first hypothesis is that **heart disease is higher in the Southern States**, this is largely supported by data that show that rates of heart disease are typically higher in the Southern States. As we can see in the US map below, the light blue states is the Southern states and it shows the rates are higher.
+
+```{r hypo1, echo=FALSE}
+## Sort the data by state
+
+rate_by_state <- new_hrt %>%
+  group_by(State) %>%
+  summarise(StateRate = mean(RatePer100Thous, na.rm = TRUE))
+
+## Graph the data by state to show state differences
+```
+
+Since a graph is a bit difficult to interpret the data since there are 50 states graphing on a US map would be better to interpret the data.
+
+```{r, hypo_graph1,fig.width = 7.5, fig.asp = .62, echo=FALSE}
+# geom_col
+ggplot(rate_by_state, aes(x=State, y = StateRate)) + geom_col(width = 0.9, position = "dodge") +
+  labs(x = "State", y = "Rate Per 100,000", title = "Rate of Heart Disease by State") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# reorder
+Rate_by_state %>% 
+  mutate(State = fct_reorder(State, StateRate)) %>%
+  ggplot(aes(x=State, y = StateRate)) + geom_col(width = 0.9, position = "dodge") +
+  labs(x = "State", y = "Rate Per 100,000", title = "Rate of Heart Disease by State") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+In the map, the light blue states is the Southern states and it shows the rates are higher.
+```{r hypo_graph11, echo=FALSE}
+mapdata <- data.frame( rate = rate_by_state$StateRate, state =rate_by_state$State)
+map_State <- plot_usmap(data = mapdata, values = "rate", color = "red") + 
+  scale_fill_continuous(name = "Rate of Heart Disease by State", label = scales::comma) + 
+  theme(legend.position = "right")
+map_State
+## In the map, the light blue states is the Southern states and it shows the rates are higher
+```
+
+## Hypothesis 2
+
+The second hypothesis of us is that **heart disease is higher amongst African Americans**. Based on the plot, we can see that the rate in black is the highest amongst all other race/ethnicity.
+```{r hypo2, echo=FALSE}
+## calculate rate of heart disease by race
+rate_by_ethnicity <- new_hrt %>% 
+  group_by(RaceEthnicity) %>%
+  summarise(EthnicityRate = mean(RatePer100Thous, na.rm = TRUE))
+```
+
+```{r, hypo_graph2, echo=FALSE}
+## Graph the data by race to show race differences
+ggplot(rate_by_ethnicity, aes(x=EthnicityRate, y = RaceEthnicity)) + geom_col() +
+  labs(y = "Race", x = "Rate Per 100,000", title = "Rate of Heart Disease by Race") 
+## The plot shows that the rate in black is the highest.
+```
+
+
+
+## Hypothesis 3
+
+The third hypothesis is that **heart disease is higher amongst males**. Based on the plot, we can see that the rate of male is higher than female.
+```{r hypo3, echo=FALSE}
+## calculate rate of heart disease by gender
+rate_by_gender <- new_hrt %>% 
+  group_by(Gender) %>% 
+  summarise(Rate = mean(RatePer100Thous, na.rm = TRUE))
+```
+
+```{r hypo_graph3, echo=FALSE}
+## Graph the data by gender to show gender differences
+ggplot(rate_by_gender, aes(x=Gender, y = Rate)) + geom_col() +
+  labs(x = "Gender", y = "Rate Per 100,000", title = "Rate of Heart Disease by Gender") 
+## The plot shows that the rate in male is highest.
+```
+
+# Next Steps
+
+The work we've done so far is that we tidied and explored the data. Through initial analysis, we found the evidence to support our three hypothesis along with two scholarly articles. We also provided a visualization of the evidence in the form of graphs. Our next step is to fine tune the data even further and to find a few more scholarly articles to support our multiple hypothesis, as we are missing an article to support our gender hypothesis. Additionally, since we only have generalized data, for example, we have the rates of heart disease per state but we can further break it down by county and see if its consistent between all states. Essentially, we need more visualizations. Lastly, the final step would be to put all of our research into a presentation that is both visually informative and communicates well.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
